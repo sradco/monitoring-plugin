@@ -110,6 +110,10 @@ type healthStubManagementClient struct {
 	alertingHealth func(ctx context.Context) (k8s.AlertingHealth, error)
 }
 
+func (s *healthStubManagementClient) GetAlerts(ctx context.Context, req k8s.GetAlertsRequest) ([]k8s.PrometheusAlert, error) {
+	return nil, nil
+}
+
 func (s *healthStubManagementClient) GetAlertingHealth(ctx context.Context) (k8s.AlertingHealth, error) {
 	if s.alertingHealth != nil {
 		return s.alertingHealth(ctx)
