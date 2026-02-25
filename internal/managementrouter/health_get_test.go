@@ -9,9 +9,11 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
 	"github.com/openshift/monitoring-plugin/internal/managementrouter"
 	"github.com/openshift/monitoring-plugin/pkg/k8s"
+	"github.com/openshift/monitoring-plugin/pkg/management"
 )
 
 var _ = Describe("GetHealth", func() {
@@ -110,8 +112,16 @@ type healthStubManagementClient struct {
 	alertingHealth func(ctx context.Context) (k8s.AlertingHealth, error)
 }
 
+func (s *healthStubManagementClient) ListRules(ctx context.Context, prOptions management.PrometheusRuleOptions, arOptions management.AlertRuleOptions) ([]monitoringv1.Rule, error) {
+	return nil, nil
+}
+
 func (s *healthStubManagementClient) GetAlerts(ctx context.Context, req k8s.GetAlertsRequest) ([]k8s.PrometheusAlert, error) {
 	return nil, nil
+}
+
+func (s *healthStubManagementClient) GetRules(ctx context.Context, req k8s.GetRulesRequest) ([]k8s.PrometheusRuleGroup, error) {
+	return []k8s.PrometheusRuleGroup{}, nil
 }
 
 func (s *healthStubManagementClient) GetAlertingHealth(ctx context.Context) (k8s.AlertingHealth, error) {
