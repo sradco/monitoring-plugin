@@ -153,6 +153,10 @@ func (s *stubManagementClient) CreatePlatformAlertRule(ctx context.Context, aler
 	return "", nil
 }
 
+func (s *stubManagementClient) DeleteUserDefinedAlertRuleById(ctx context.Context, alertRuleId string) error {
+	return nil
+}
+
 func (s *stubManagementClient) GetAlerts(ctx context.Context, req k8s.GetAlertsRequest) ([]k8s.PrometheusAlert, error) {
 	return nil, nil
 }

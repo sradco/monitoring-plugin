@@ -124,6 +124,10 @@ func (s *healthStubManagementClient) CreatePlatformAlertRule(ctx context.Context
 	return "", nil
 }
 
+func (s *healthStubManagementClient) DeleteUserDefinedAlertRuleById(ctx context.Context, alertRuleId string) error {
+	return nil
+}
+
 func (s *healthStubManagementClient) GetAlerts(ctx context.Context, req k8s.GetAlertsRequest) ([]k8s.PrometheusAlert, error) {
 	return nil, nil
 }
