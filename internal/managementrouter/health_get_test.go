@@ -116,6 +116,14 @@ func (s *healthStubManagementClient) ListRules(ctx context.Context, prOptions ma
 	return nil, nil
 }
 
+func (s *healthStubManagementClient) CreateUserDefinedAlertRule(ctx context.Context, alertRule monitoringv1.Rule, prOptions management.PrometheusRuleOptions) (string, error) {
+	return "", nil
+}
+
+func (s *healthStubManagementClient) CreatePlatformAlertRule(ctx context.Context, alertRule monitoringv1.Rule) (string, error) {
+	return "", nil
+}
+
 func (s *healthStubManagementClient) GetAlerts(ctx context.Context, req k8s.GetAlertsRequest) ([]k8s.PrometheusAlert, error) {
 	return nil, nil
 }

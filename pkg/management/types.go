@@ -13,6 +13,12 @@ type Client interface {
 	// ListRules lists all alert rules in the specified PrometheusRule resource
 	ListRules(ctx context.Context, prOptions PrometheusRuleOptions, arOptions AlertRuleOptions) ([]monitoringv1.Rule, error)
 
+	// CreateUserDefinedAlertRule creates a new user-defined alert rule
+	CreateUserDefinedAlertRule(ctx context.Context, alertRule monitoringv1.Rule, prOptions PrometheusRuleOptions) (alertRuleId string, err error)
+
+	// CreatePlatformAlertRule creates a new platform alert rule
+	CreatePlatformAlertRule(ctx context.Context, alertRule monitoringv1.Rule) (alertRuleId string, err error)
+
 	// GetAlerts retrieves Prometheus alerts
 	GetAlerts(ctx context.Context, req k8s.GetAlertsRequest) ([]k8s.PrometheusAlert, error)
 	// GetRules retrieves Prometheus alerting rules and active alerts

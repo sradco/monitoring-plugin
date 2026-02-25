@@ -145,6 +145,14 @@ func (s *stubManagementClient) ListRules(ctx context.Context, prOptions manageme
 	return nil, nil
 }
 
+func (s *stubManagementClient) CreateUserDefinedAlertRule(ctx context.Context, alertRule monitoringv1.Rule, prOptions management.PrometheusRuleOptions) (string, error) {
+	return "", nil
+}
+
+func (s *stubManagementClient) CreatePlatformAlertRule(ctx context.Context, alertRule monitoringv1.Rule) (string, error) {
+	return "", nil
+}
+
 func (s *stubManagementClient) GetAlerts(ctx context.Context, req k8s.GetAlertsRequest) ([]k8s.PrometheusAlert, error) {
 	return nil, nil
 }
