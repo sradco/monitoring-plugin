@@ -21,6 +21,9 @@ type Client interface {
 	// TestConnection tests the connection to the Kubernetes cluster
 	TestConnection(ctx context.Context) error
 
+	// AlertingHealth returns alerting route and stack health details
+	AlertingHealth(ctx context.Context) (AlertingHealth, error)
+
 	// PrometheusAlerts retrieves active Prometheus alerts
 	PrometheusAlerts() PrometheusAlertsInterface
 
