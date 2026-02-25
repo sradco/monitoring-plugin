@@ -25,8 +25,12 @@ type client struct {
 
 	prometheusAlerts *prometheusAlerts
 
-	prometheusRuleManager *prometheusRuleManager
-	namespaceManager      *namespaceManager
+	prometheusRuleManager     *prometheusRuleManager
+	alertRelabelConfigManager *alertRelabelConfigManager
+	alertingRuleManager       *alertingRuleManager
+	namespaceManager          *namespaceManager
+	relabeledRulesManager     *relabeledRulesManager
+	clusterMonitoringConfig   *clusterMonitoringConfigManager
 }
 
 func NewClient(ctx context.Context, config *rest.Config) (Client, error) {
@@ -64,9 +68,29 @@ func NewClient(ctx context.Context, config *rest.Config) (Client, error) {
 
 	c.prometheusAlerts = newPrometheusAlerts(routeClientset, clientset.CoreV1(), config, c.prometheusRuleManager)
 
+	c.alertRelabelConfigManager, err = newAlertRelabelConfigManager(ctx, osmv1clientset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create alert relabel config manager: %w", err)
+	}
+
+	c.alertingRuleManager, err = newAlertingRuleManager(ctx, osmv1clientset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create alerting rule manager: %w", err)
+	}
+
 	c.namespaceManager, err = newNamespaceManager(ctx, clientset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create namespace manager: %w", err)
+	}
+
+	c.clusterMonitoringConfig, err = newClusterMonitoringConfigManager(ctx, clientset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cluster monitoring config manager: %w", err)
+	}
+
+	c.relabeledRulesManager, err = newRelabeledRulesManager(ctx, c.namespaceManager, c.alertRelabelConfigManager, monitoringv1clientset, clientset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create relabeled rules config manager: %w", err)
 	}
 
 	return c, nil
@@ -86,6 +110,18 @@ func (c *client) PrometheusAlerts() PrometheusAlertsInterface {
 
 func (c *client) PrometheusRules() PrometheusRuleInterface {
 	return c.prometheusRuleManager
+}
+
+func (c *client) AlertRelabelConfigs() AlertRelabelConfigInterface {
+	return c.alertRelabelConfigManager
+}
+
+func (c *client) AlertingRules() AlertingRuleInterface {
+	return c.alertingRuleManager
+}
+
+func (c *client) RelabeledRules() RelabeledRulesInterface {
+	return c.relabeledRulesManager
 }
 
 func (c *client) Namespace() NamespaceInterface {
