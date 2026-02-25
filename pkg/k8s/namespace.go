@@ -90,7 +90,11 @@ func (nm *namespaceManager) updateMonitoringNamespace(ns *corev1.Namespace) {
 	nm.mu.Lock()
 	defer nm.mu.Unlock()
 
-	nm.monitoringNamespaces[ns.Name] = true
+	if ns.Labels != nil && ns.Labels[ClusterMonitoringLabel] == "true" {
+		nm.monitoringNamespaces[ns.Name] = true
+	} else {
+		delete(nm.monitoringNamespaces, ns.Name)
+	}
 }
 
 func (nm *namespaceManager) removeMonitoringNamespace(name string) {
