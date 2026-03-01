@@ -128,6 +128,10 @@ func (s *healthStubManagementClient) CreatePlatformAlertRule(ctx context.Context
 	return "", nil
 }
 
+func (s *healthStubManagementClient) UpdateUserDefinedAlertRule(ctx context.Context, alertRuleId string, alertRule monitoringv1.Rule) (string, error) {
+	return "", nil
+}
+
 func (s *healthStubManagementClient) DeleteUserDefinedAlertRuleById(ctx context.Context, alertRuleId string) error {
 	return nil
 }

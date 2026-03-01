@@ -157,6 +157,10 @@ func (s *stubManagementClient) CreatePlatformAlertRule(ctx context.Context, aler
 	return "", nil
 }
 
+func (s *stubManagementClient) UpdateUserDefinedAlertRule(ctx context.Context, alertRuleId string, alertRule monitoringv1.Rule) (string, error) {
+	return "", nil
+}
+
 func (s *stubManagementClient) DeleteUserDefinedAlertRuleById(ctx context.Context, alertRuleId string) error {
 	return nil
 }
