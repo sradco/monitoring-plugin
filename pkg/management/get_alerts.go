@@ -3,8 +3,12 @@ package management
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/openshift/monitoring-plugin/pkg/alertcomponent"
+	"github.com/openshift/monitoring-plugin/pkg/classification"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
 	"k8s.io/apimachinery/pkg/types"
@@ -13,6 +17,11 @@ import (
 	"github.com/openshift/monitoring-plugin/pkg/k8s"
 	"github.com/openshift/monitoring-plugin/pkg/managementlabels"
 )
+
+var cvoAlertNames = map[string]struct{}{
+	"ClusterOperatorDown":     {},
+	"ClusterOperatorDegraded": {},
+}
 
 func (c *client) GetAlerts(ctx context.Context, req k8s.GetAlertsRequest) ([]k8s.PrometheusAlert, error) {
 	alerts, err := c.k8sClient.PrometheusAlerts().GetAlerts(ctx, req)
@@ -40,6 +49,8 @@ func (c *client) GetAlerts(ctx context.Context, req k8s.GetAlertsRequest) ([]k8s
 
 		// correlate alert -> base alert rule via subset matching against relabeled rules
 		alertRuleId := alert.Labels[k8s.AlertRuleLabelId]
+		component := ""
+		layer := ""
 
 		bestRule, corrId := correlateAlertToRule(alert.Labels, rules)
 		if corrId != "" {
@@ -55,6 +66,21 @@ func (c *client) GetAlerts(ctx context.Context, req k8s.GetAlertsRequest) ([]k8s
 			if src := c.deriveAlertSource(bestRule.Labels); src != "" {
 				alert.Labels[k8s.AlertSourceLabel] = src
 			}
+			component, layer = classifyFromRule(bestRule)
+		} else {
+			component, layer = classifyFromAlertLabels(alert.Labels)
+		}
+
+		if cvoComponent, cvoLayer, ok := classifyCvoAlert(alert.Labels); ok {
+			component = cvoComponent
+			layer = cvoLayer
+		}
+
+		// Dynamic classification: _from labels on the rule point to alert labels
+		// whose runtime values become the classification. Takes precedence over
+		// static classification labels.
+		if bestRule != nil {
+			component, layer = ApplyDynamicClassification(bestRule.Labels, alert.Labels, component, layer)
 		}
 
 		// keep label and optional enriched fields consistent
@@ -62,6 +88,11 @@ func (c *client) GetAlerts(ctx context.Context, req k8s.GetAlertsRequest) ([]k8s
 			alert.Labels[k8s.AlertRuleLabelId] = alertRuleId
 		}
 		alert.AlertRuleId = alertRuleId
+
+		alert.AlertComponent = component
+		alert.AlertLayer = layer
+
+		delete(alert.Labels, managementlabels.ClassificationManagedByKey)
 
 		result = append(result, alert)
 	}
@@ -169,4 +200,109 @@ func (c *client) deriveAlertSource(ruleLabels map[string]string) string {
 		return k8s.AlertSourcePlatform
 	}
 	return k8s.AlertSourceUser
+}
+
+func classifyFromRule(rule *monitoringv1.Rule) (string, string) {
+	lbls := model.LabelSet{}
+	for k, v := range rule.Labels {
+		lbls[model.LabelName(k)] = model.LabelValue(v)
+	}
+	if _, ok := lbls["namespace"]; !ok {
+		if ns := rule.Labels[k8s.PrometheusRuleLabelNamespace]; ns != "" {
+			lbls["namespace"] = model.LabelValue(ns)
+		}
+	}
+	if rule.Alert != "" {
+		lbls[model.LabelName(managementlabels.AlertNameLabel)] = model.LabelValue(rule.Alert)
+	}
+
+	layer, component := alertcomponent.DetermineComponent(lbls)
+	if component == "" || component == "Others" {
+		component = "other"
+		layer = deriveLayerFromSource(rule.Labels)
+	}
+
+	component, layer = applyRuleScopedDefaults(rule.Labels, component, layer)
+	return component, layer
+}
+
+func classifyFromAlertLabels(alertLabels map[string]string) (string, string) {
+	lbls := model.LabelSet{}
+	for k, v := range alertLabels {
+		lbls[model.LabelName(k)] = model.LabelValue(v)
+	}
+	layer, component := alertcomponent.DetermineComponent(lbls)
+	if component == "" || component == "Others" {
+		component = "other"
+		layer = deriveLayerFromSource(alertLabels)
+	}
+	component, layer = applyRuleScopedDefaults(alertLabels, component, layer)
+	return component, layer
+}
+
+func deriveLayerFromSource(labels map[string]string) string {
+	if labels[k8s.AlertSourceLabel] == k8s.AlertSourcePlatform {
+		return "cluster"
+	}
+	if labels[k8s.PrometheusRuleLabelNamespace] == k8s.ClusterMonitoringNamespace {
+		return "cluster"
+	}
+	promSrc := labels["prometheus"]
+	if strings.HasPrefix(promSrc, "openshift-monitoring/") {
+		return "cluster"
+	}
+	return "namespace"
+}
+
+// applyRuleScopedDefaults applies static classification labels from the rule.
+func applyRuleScopedDefaults(ruleLabels map[string]string, component, layer string) (string, string) {
+	if ruleLabels == nil {
+		return component, layer
+	}
+	if v := strings.TrimSpace(ruleLabels[k8s.AlertRuleClassificationComponentKey]); v != "" {
+		if classification.ValidateComponent(v) {
+			component = v
+		}
+	}
+	if v := strings.TrimSpace(ruleLabels[k8s.AlertRuleClassificationLayerKey]); v != "" {
+		if classification.ValidateLayer(v) {
+			layer = strings.ToLower(strings.TrimSpace(v))
+		}
+	}
+	return component, layer
+}
+
+// applyDynamicClassification handles _from labels: the rule label points to an
+// alert label whose runtime value becomes the classification. _from takes
+// precedence over static classification labels.
+func ApplyDynamicClassification(ruleLabels, alertLabels map[string]string, component, layer string) (string, string) {
+	if ruleLabels == nil {
+		return component, layer
+	}
+	if from := strings.TrimSpace(ruleLabels[k8s.AlertRuleClassificationComponentFromKey]); from != "" {
+		if classification.ValidatePromLabelName(from) {
+			if v := strings.TrimSpace(alertLabels[from]); v != "" && classification.ValidateComponent(v) {
+				component = v
+			}
+		}
+	}
+	if from := strings.TrimSpace(ruleLabels[k8s.AlertRuleClassificationLayerFromKey]); from != "" {
+		if classification.ValidatePromLabelName(from) {
+			if v := alertLabels[from]; classification.ValidateLayer(v) {
+				layer = strings.ToLower(strings.TrimSpace(v))
+			}
+		}
+	}
+	return component, layer
+}
+
+func classifyCvoAlert(alertLabels map[string]string) (string, string, bool) {
+	if _, ok := cvoAlertNames[alertLabels[managementlabels.AlertNameLabel]]; !ok {
+		return "", "", false
+	}
+	component := alertLabels["name"]
+	if component == "" {
+		component = "version"
+	}
+	return component, "cluster", true
 }

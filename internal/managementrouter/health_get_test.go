@@ -142,3 +142,11 @@ func (s *healthStubManagementClient) GetAlertingHealth(ctx context.Context) (k8s
 	}
 	return k8s.AlertingHealth{}, nil
 }
+
+func (s *healthStubManagementClient) UpdateAlertRuleClassification(ctx context.Context, req management.UpdateRuleClassificationRequest) error {
+	return nil
+}
+
+func (s *healthStubManagementClient) BulkUpdateAlertRuleClassification(ctx context.Context, items []management.UpdateRuleClassificationRequest) []error {
+	return nil
+}

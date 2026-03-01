@@ -7,7 +7,8 @@ import (
 )
 
 type client struct {
-	k8sClient k8s.Client
+	k8sClient              k8s.Client
+	enableUserWorkloadARCs bool
 }
 
 func (c *client) IsPlatformAlertRule(prId types.NamespacedName) bool {

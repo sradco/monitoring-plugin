@@ -174,3 +174,11 @@ func (s *stubManagementClient) GetAlertingHealth(ctx context.Context) (k8s.Alert
 	}
 	return k8s.AlertingHealth{}, nil
 }
+
+func (s *stubManagementClient) UpdateAlertRuleClassification(ctx context.Context, req management.UpdateRuleClassificationRequest) error {
+	return nil
+}
+
+func (s *stubManagementClient) BulkUpdateAlertRuleClassification(ctx context.Context, items []management.UpdateRuleClassificationRequest) []error {
+	return nil
+}

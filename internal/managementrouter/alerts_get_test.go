@@ -320,6 +320,8 @@ var _ = Describe("GetAlerts", func() {
 
 			alert := response.Data.Alerts[0]
 			Expect(alert.AlertRuleId).To(Equal(ruleId))
+			Expect(alert.AlertComponent).NotTo(BeEmpty())
+			Expect(alert.AlertLayer).NotTo(BeEmpty())
 		})
 
 		It("enriches platform alert without alertingRule when PrometheusRule is not from AlertingRule CR", func() {

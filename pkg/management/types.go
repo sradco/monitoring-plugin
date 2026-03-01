@@ -29,6 +29,11 @@ type Client interface {
 
 	// GetAlertingHealth retrieves alerting health details
 	GetAlertingHealth(ctx context.Context) (k8s.AlertingHealth, error)
+
+	// UpdateAlertRuleClassification updates component/layer for a single alert rule id
+	UpdateAlertRuleClassification(ctx context.Context, req UpdateRuleClassificationRequest) error
+	// BulkUpdateAlertRuleClassification updates classification for multiple rule ids
+	BulkUpdateAlertRuleClassification(ctx context.Context, items []UpdateRuleClassificationRequest) []error
 }
 
 // PrometheusRuleOptions specifies options for selecting PrometheusRule resources and groups

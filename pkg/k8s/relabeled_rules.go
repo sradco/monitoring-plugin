@@ -37,6 +37,8 @@ const (
 
 	AlertRuleClassificationComponentKey = "openshift_io_alert_rule_component"
 	AlertRuleClassificationLayerKey     = "openshift_io_alert_rule_layer"
+	AlertRuleClassificationComponentFromKey = "openshift_io_alert_rule_component_from"
+	AlertRuleClassificationLayerFromKey     = "openshift_io_alert_rule_layer_from"
 
 	AppKubernetesIoComponent                   = "app.kubernetes.io/component"
 	AppKubernetesIoComponentAlertManagementApi = "alert-management-api"
