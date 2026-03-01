@@ -145,6 +145,10 @@ func (s *stubManagementClient) ListRules(ctx context.Context, prOptions manageme
 	return nil, nil
 }
 
+func (s *stubManagementClient) GetRuleById(ctx context.Context, alertRuleId string) (monitoringv1.Rule, error) {
+	return monitoringv1.Rule{}, nil
+}
+
 func (s *stubManagementClient) CreateUserDefinedAlertRule(ctx context.Context, alertRule monitoringv1.Rule, prOptions management.PrometheusRuleOptions) (string, error) {
 	return "", nil
 }
@@ -154,6 +158,18 @@ func (s *stubManagementClient) CreatePlatformAlertRule(ctx context.Context, aler
 }
 
 func (s *stubManagementClient) DeleteUserDefinedAlertRuleById(ctx context.Context, alertRuleId string) error {
+	return nil
+}
+
+func (s *stubManagementClient) UpdatePlatformAlertRule(ctx context.Context, alertRuleId string, alertRule monitoringv1.Rule) error {
+	return nil
+}
+
+func (s *stubManagementClient) DropPlatformAlertRule(ctx context.Context, alertRuleId string) error {
+	return nil
+}
+
+func (s *stubManagementClient) RestorePlatformAlertRule(ctx context.Context, alertRuleId string) error {
 	return nil
 }
 

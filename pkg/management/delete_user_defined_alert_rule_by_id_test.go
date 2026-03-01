@@ -120,41 +120,71 @@ var _ = Describe("DeleteUserDefinedAlertRuleById", func() {
 					},
 				}
 			}
-			// Provide owning AlertingRule so deletion can succeed
-			mockK8s.AlertingRulesFunc = func() k8s.AlertingRuleInterface {
-				return &testutils.MockAlertingRuleInterface{
-					GetFunc: func(ctx context.Context, name string) (*osmv1.AlertingRule, bool, error) {
-						if name == "platform-alert-rules" {
-							return &osmv1.AlertingRule{
-								ObjectMeta: metav1.ObjectMeta{
-									Name:      "platform-alert-rules",
-									Namespace: k8s.ClusterMonitoringNamespace,
-								},
-								Spec: osmv1.AlertingRuleSpec{
-									Groups: []osmv1.RuleGroup{
-										{
-											Name: "test-group",
-											Rules: []osmv1.Rule{
-												{Alert: platformRule.Alert},
-											},
+		// Provide owning AlertingRule so deletion can succeed
+		mockK8s.AlertingRulesFunc = func() k8s.AlertingRuleInterface {
+			return &testutils.MockAlertingRuleInterface{
+				GetFunc: func(ctx context.Context, name string) (*osmv1.AlertingRule, bool, error) {
+					if name == "platform-alert-rules" {
+						return &osmv1.AlertingRule{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "platform-alert-rules",
+								Namespace: k8s.ClusterMonitoringNamespace,
+							},
+							Spec: osmv1.AlertingRuleSpec{
+								Groups: []osmv1.RuleGroup{
+									{
+										Name: "test-group",
+										Rules: []osmv1.Rule{
+											{Alert: platformRule.Alert},
 										},
 									},
 								},
-							}, true, nil
-						}
-						return nil, false, nil
-					},
-					UpdateFunc: func(ctx context.Context, ar osmv1.AlertingRule) error {
-						return nil
-					},
-				}
+							},
+						}, true, nil
+					}
+					return nil, false, nil
+				},
+				DeleteFunc: func(ctx context.Context, name string) error {
+					return nil
+				},
 			}
-		})
+		}
+	})
 
-		It("deletes rule from owning AlertingRule", func() {
-			err := client.DeleteUserDefinedAlertRuleById(ctx, platformRuleId)
-			Expect(err).NotTo(HaveOccurred())
-		})
+	It("deletes the entire AlertingRule CR when it was the last rule", func() {
+		arDeleted := false
+		mockK8s.AlertingRulesFunc = func() k8s.AlertingRuleInterface {
+			return &testutils.MockAlertingRuleInterface{
+				GetFunc: func(ctx context.Context, name string) (*osmv1.AlertingRule, bool, error) {
+					if name == "platform-alert-rules" {
+						return &osmv1.AlertingRule{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "platform-alert-rules",
+								Namespace: k8s.ClusterMonitoringNamespace,
+							},
+							Spec: osmv1.AlertingRuleSpec{
+								Groups: []osmv1.RuleGroup{
+									{
+										Name:  "test-group",
+										Rules: []osmv1.Rule{{Alert: platformRule.Alert}},
+									},
+								},
+							},
+						}, true, nil
+					}
+					return nil, false, nil
+				},
+				DeleteFunc: func(ctx context.Context, name string) error {
+					arDeleted = true
+					return nil
+				},
+			}
+		}
+
+		err := client.DeleteUserDefinedAlertRuleById(ctx, platformRuleId)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(arDeleted).To(BeTrue(), "AlertingRule CR should be deleted when last rule is removed")
+	})
 	})
 
 	Context("when deleting a platform rule but owning AlertingRule is GitOps-managed", func() {
@@ -606,6 +636,254 @@ var _ = Describe("DeleteUserDefinedAlertRuleById", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedPR.Spec.Groups).To(HaveLen(1))
 			Expect(updatedPR.Spec.Groups[0].Name).To(Equal("group-with-rules"))
+		})
+	})
+
+	Context("ARC cleanup on deletion", func() {
+		Context("when a user-defined rule has an associated ARC (flag enabled)", func() {
+			It("deletes the ARC after removing the rule", func() {
+				arcName := k8s.GetAlertRelabelConfigName("user-rule", userRule1Id)
+				arcDeleted := false
+
+				GinkgoT().Setenv("ENABLE_USER_WORKLOAD_ARCS", "true")
+				client = management.New(ctx, mockK8s)
+
+				mockK8s.RelabeledRulesFunc = func() k8s.RelabeledRulesInterface {
+					return &testutils.MockRelabeledRulesInterface{
+						GetFunc: func(ctx context.Context, id string) (monitoringv1.Rule, bool) {
+							if id == userRule1Id {
+								return userRule1, true
+							}
+							return monitoringv1.Rule{}, false
+						},
+					}
+				}
+				mockK8s.NamespaceFunc = func() k8s.NamespaceInterface {
+					return &testutils.MockNamespaceInterface{
+						IsClusterMonitoringNamespaceFunc: func(name string) bool { return false },
+					}
+				}
+				mockK8s.PrometheusRulesFunc = func() k8s.PrometheusRuleInterface {
+					return &testutils.MockPrometheusRuleInterface{
+						GetFunc: func(ctx context.Context, namespace string, name string) (*monitoringv1.PrometheusRule, bool, error) {
+							return &monitoringv1.PrometheusRule{
+								ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
+								Spec: monitoringv1.PrometheusRuleSpec{
+									Groups: []monitoringv1.RuleGroup{
+										{Name: "grp", Rules: []monitoringv1.Rule{userRule1}},
+									},
+								},
+							}, true, nil
+						},
+						DeleteFunc: func(ctx context.Context, namespace string, name string) error {
+							return nil
+						},
+					}
+				}
+				mockK8s.AlertRelabelConfigsFunc = func() k8s.AlertRelabelConfigInterface {
+					return &testutils.MockAlertRelabelConfigInterface{
+						GetFunc: func(ctx context.Context, namespace string, name string) (*osmv1.AlertRelabelConfig, bool, error) {
+							if name == arcName {
+								return &osmv1.AlertRelabelConfig{
+									ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
+								}, true, nil
+							}
+							return nil, false, nil
+						},
+						DeleteFunc: func(ctx context.Context, namespace string, name string) error {
+							if name == arcName {
+								arcDeleted = true
+							}
+							return nil
+						},
+					}
+				}
+
+				err := client.DeleteUserDefinedAlertRuleById(ctx, userRule1Id)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(arcDeleted).To(BeTrue())
+			})
+		})
+
+		Context("when a user-defined rule has no associated ARC", func() {
+			It("succeeds without error", func() {
+				mockK8s.RelabeledRulesFunc = func() k8s.RelabeledRulesInterface {
+					return &testutils.MockRelabeledRulesInterface{
+						GetFunc: func(ctx context.Context, id string) (monitoringv1.Rule, bool) {
+							if id == userRule1Id {
+								return userRule1, true
+							}
+							return monitoringv1.Rule{}, false
+						},
+					}
+				}
+				mockK8s.NamespaceFunc = func() k8s.NamespaceInterface {
+					return &testutils.MockNamespaceInterface{
+						IsClusterMonitoringNamespaceFunc: func(name string) bool { return false },
+					}
+				}
+				mockK8s.PrometheusRulesFunc = func() k8s.PrometheusRuleInterface {
+					return &testutils.MockPrometheusRuleInterface{
+						GetFunc: func(ctx context.Context, namespace string, name string) (*monitoringv1.PrometheusRule, bool, error) {
+							return &monitoringv1.PrometheusRule{
+								ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
+								Spec: monitoringv1.PrometheusRuleSpec{
+									Groups: []monitoringv1.RuleGroup{
+										{Name: "grp", Rules: []monitoringv1.Rule{userRule1}},
+									},
+								},
+							}, true, nil
+						},
+						DeleteFunc: func(ctx context.Context, namespace string, name string) error {
+							return nil
+						},
+					}
+				}
+
+				err := client.DeleteUserDefinedAlertRuleById(ctx, userRule1Id)
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+
+		Context("when the associated ARC is GitOps-managed", func() {
+			It("skips ARC deletion", func() {
+				arcName := k8s.GetAlertRelabelConfigName("user-rule", userRule1Id)
+				arcDeleted := false
+
+				mockK8s.RelabeledRulesFunc = func() k8s.RelabeledRulesInterface {
+					return &testutils.MockRelabeledRulesInterface{
+						GetFunc: func(ctx context.Context, id string) (monitoringv1.Rule, bool) {
+							if id == userRule1Id {
+								return userRule1, true
+							}
+							return monitoringv1.Rule{}, false
+						},
+					}
+				}
+				mockK8s.NamespaceFunc = func() k8s.NamespaceInterface {
+					return &testutils.MockNamespaceInterface{
+						IsClusterMonitoringNamespaceFunc: func(name string) bool { return false },
+					}
+				}
+				mockK8s.PrometheusRulesFunc = func() k8s.PrometheusRuleInterface {
+					return &testutils.MockPrometheusRuleInterface{
+						GetFunc: func(ctx context.Context, namespace string, name string) (*monitoringv1.PrometheusRule, bool, error) {
+							return &monitoringv1.PrometheusRule{
+								ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
+								Spec: monitoringv1.PrometheusRuleSpec{
+									Groups: []monitoringv1.RuleGroup{
+										{Name: "grp", Rules: []monitoringv1.Rule{userRule1}},
+									},
+								},
+							}, true, nil
+						},
+						DeleteFunc: func(ctx context.Context, namespace string, name string) error {
+							return nil
+						},
+					}
+				}
+				mockK8s.AlertRelabelConfigsFunc = func() k8s.AlertRelabelConfigInterface {
+					return &testutils.MockAlertRelabelConfigInterface{
+						GetFunc: func(ctx context.Context, namespace string, name string) (*osmv1.AlertRelabelConfig, bool, error) {
+							if name == arcName {
+								return &osmv1.AlertRelabelConfig{
+									ObjectMeta: metav1.ObjectMeta{
+										Namespace:   namespace,
+										Name:        name,
+										Annotations: map[string]string{"argocd.argoproj.io/tracking-id": "gitops"},
+									},
+								}, true, nil
+							}
+							return nil, false, nil
+						},
+						DeleteFunc: func(ctx context.Context, namespace string, name string) error {
+							arcDeleted = true
+							return nil
+						},
+					}
+				}
+
+				err := client.DeleteUserDefinedAlertRuleById(ctx, userRule1Id)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(arcDeleted).To(BeFalse())
+			})
+		})
+
+		Context("when deleting a platform rule with an associated ARC", func() {
+			It("deletes the ARC from openshift-monitoring", func() {
+				arcName := k8s.GetAlertRelabelConfigName("platform-rule", platformRuleId)
+				arcDeleted := false
+
+				mockK8s.RelabeledRulesFunc = func() k8s.RelabeledRulesInterface {
+					return &testutils.MockRelabeledRulesInterface{
+						GetFunc: func(ctx context.Context, id string) (monitoringv1.Rule, bool) {
+							if id == platformRuleId {
+								return platformRule, true
+							}
+							return monitoringv1.Rule{}, false
+						},
+					}
+				}
+				mockK8s.NamespaceFunc = func() k8s.NamespaceInterface {
+					return &testutils.MockNamespaceInterface{
+						IsClusterMonitoringNamespaceFunc: func(name string) bool { return name == "openshift-monitoring" },
+					}
+				}
+				mockK8s.PrometheusRulesFunc = func() k8s.PrometheusRuleInterface {
+					return &testutils.MockPrometheusRuleInterface{
+						GetFunc: func(ctx context.Context, namespace string, name string) (*monitoringv1.PrometheusRule, bool, error) {
+							return &monitoringv1.PrometheusRule{
+								ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
+								Spec: monitoringv1.PrometheusRuleSpec{
+									Groups: []monitoringv1.RuleGroup{
+										{Name: "grp", Rules: []monitoringv1.Rule{platformRule}},
+									},
+								},
+							}, true, nil
+						},
+					}
+				}
+			mockK8s.AlertingRulesFunc = func() k8s.AlertingRuleInterface {
+				return &testutils.MockAlertingRuleInterface{
+					GetFunc: func(ctx context.Context, name string) (*osmv1.AlertingRule, bool, error) {
+						if name == "platform-alert-rules" {
+							return &osmv1.AlertingRule{
+								ObjectMeta: metav1.ObjectMeta{Name: "platform-alert-rules", Namespace: k8s.ClusterMonitoringNamespace},
+								Spec: osmv1.AlertingRuleSpec{
+									Groups: []osmv1.RuleGroup{
+										{Name: "grp", Rules: []osmv1.Rule{{Alert: platformRule.Alert}}},
+									},
+								},
+							}, true, nil
+						}
+						return nil, false, nil
+					},
+					DeleteFunc: func(ctx context.Context, name string) error { return nil },
+				}
+			}
+			mockK8s.AlertRelabelConfigsFunc = func() k8s.AlertRelabelConfigInterface {
+					return &testutils.MockAlertRelabelConfigInterface{
+						GetFunc: func(ctx context.Context, namespace string, name string) (*osmv1.AlertRelabelConfig, bool, error) {
+							if name == arcName && namespace == k8s.ClusterMonitoringNamespace {
+								return &osmv1.AlertRelabelConfig{
+									ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
+								}, true, nil
+							}
+							return nil, false, nil
+						},
+						DeleteFunc: func(ctx context.Context, namespace string, name string) error {
+							if name == arcName && namespace == k8s.ClusterMonitoringNamespace {
+								arcDeleted = true
+							}
+							return nil
+						},
+					}
+				}
+
+				err := client.DeleteUserDefinedAlertRuleById(ctx, platformRuleId)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(arcDeleted).To(BeTrue())
+			})
 		})
 	})
 })

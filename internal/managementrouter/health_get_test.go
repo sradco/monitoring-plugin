@@ -116,6 +116,10 @@ func (s *healthStubManagementClient) ListRules(ctx context.Context, prOptions ma
 	return nil, nil
 }
 
+func (s *healthStubManagementClient) GetRuleById(ctx context.Context, alertRuleId string) (monitoringv1.Rule, error) {
+	return monitoringv1.Rule{}, nil
+}
+
 func (s *healthStubManagementClient) CreateUserDefinedAlertRule(ctx context.Context, alertRule monitoringv1.Rule, prOptions management.PrometheusRuleOptions) (string, error) {
 	return "", nil
 }
@@ -125,6 +129,18 @@ func (s *healthStubManagementClient) CreatePlatformAlertRule(ctx context.Context
 }
 
 func (s *healthStubManagementClient) DeleteUserDefinedAlertRuleById(ctx context.Context, alertRuleId string) error {
+	return nil
+}
+
+func (s *healthStubManagementClient) UpdatePlatformAlertRule(ctx context.Context, alertRuleId string, alertRule monitoringv1.Rule) error {
+	return nil
+}
+
+func (s *healthStubManagementClient) DropPlatformAlertRule(ctx context.Context, alertRuleId string) error {
+	return nil
+}
+
+func (s *healthStubManagementClient) RestorePlatformAlertRule(ctx context.Context, alertRuleId string) error {
 	return nil
 }
 
