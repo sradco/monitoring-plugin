@@ -18,3 +18,9 @@ const (
 	ARCLabelAlertNameKey          = "monitoring.openshift.io/alertname"
 	ARCAnnotationAlertRuleIDKey   = "monitoring.openshift.io/alertRuleId"
 )
+
+// Classification provenance labels
+const (
+	ClassificationManagedByKey   = "openshift_io_alert_rule_classification_managed_by"
+	ClassificationManagedByValue = "monitoring-plugin"
+)

@@ -4,17 +4,15 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 	"unicode/utf8"
 
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
+	"github.com/openshift/monitoring-plugin/pkg/classification"
 	"github.com/openshift/monitoring-plugin/pkg/managementlabels"
 )
-
-var promLabelNameRegexp = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 func GetAlertingRuleId(alertRule *monitoringv1.Rule) string {
 	var name string
@@ -64,14 +62,12 @@ func normalizedBusinessLabelsBlock(in map[string]string) string {
 			continue
 		}
 		if strings.HasPrefix(key, "openshift_io_") || key == managementlabels.AlertNameLabel {
-			// Skip system labels
 			continue
 		}
-		if !promLabelNameRegexp.MatchString(key) {
+		if !classification.ValidatePromLabelName(key) {
 			continue
 		}
 		if v == "" {
-			// Align with specHash behavior: drop empty values
 			continue
 		}
 		if !utf8.ValidString(v) {
