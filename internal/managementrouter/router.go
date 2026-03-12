@@ -31,6 +31,8 @@ func New(managementClient management.Client) *mux.Router {
 	r.HandleFunc("/api/v1/alerting/rules", httpRouter.CreateAlertRule).Methods(http.MethodPost)
 	r.HandleFunc("/api/v1/alerting/rules", httpRouter.BulkDeleteUserDefinedAlertRules).Methods(http.MethodDelete)
 	r.HandleFunc("/api/v1/alerting/rules", httpRouter.BulkUpdateAlertRules).Methods(http.MethodPatch)
+	r.HandleFunc("/api/v1/alerting/rules/{ruleId}", httpRouter.UpdateAlertRule).Methods(http.MethodPatch)
+	r.HandleFunc("/api/v1/alerting/rules/{ruleId}", httpRouter.DeleteUserDefinedAlertRuleById).Methods(http.MethodDelete)
 
 	return r
 }
@@ -84,4 +86,10 @@ func parseParam(raw string, name string) (string, error) {
 		return "", fmt.Errorf("missing %s", name)
 	}
 	return value, nil
+}
+
+func getParam(r *http.Request, name string) (string, error) {
+	vars := mux.Vars(r)
+	raw := vars[name]
+	return parseParam(raw, name)
 }
