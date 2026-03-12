@@ -27,6 +27,7 @@ func New(managementClient management.Client) *mux.Router {
 
 	r.HandleFunc("/api/v1/alerting/rules", httpRouter.CreateAlertRule).Methods(http.MethodPost)
 	r.HandleFunc("/api/v1/alerting/rules", httpRouter.BulkDeleteUserDefinedAlertRules).Methods(http.MethodDelete)
+	r.HandleFunc("/api/v1/alerting/rules", httpRouter.BulkUpdateAlertRules).Methods(http.MethodPatch)
 
 	return r
 }
