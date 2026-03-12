@@ -3,8 +3,11 @@ package managementrouter
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/gorilla/mux"
 
@@ -23,6 +26,7 @@ func New(managementClient management.Client) *mux.Router {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/api/v1/alerting/rules", httpRouter.CreateAlertRule).Methods(http.MethodPost)
+	r.HandleFunc("/api/v1/alerting/rules", httpRouter.BulkDeleteUserDefinedAlertRules).Methods(http.MethodDelete)
 
 	return r
 }
@@ -64,4 +68,16 @@ func parseError(err error) (int, string) {
 	}
 	log.Printf("An unexpected error occurred: %v", err)
 	return http.StatusInternalServerError, "An unexpected error occurred"
+}
+
+func parseParam(raw string, name string) (string, error) {
+	decoded, err := url.PathUnescape(raw)
+	if err != nil {
+		return "", fmt.Errorf("invalid %s encoding", name)
+	}
+	value := strings.TrimSpace(decoded)
+	if value == "" {
+		return "", fmt.Errorf("missing %s", name)
+	}
+	return value, nil
 }
